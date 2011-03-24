@@ -100,7 +100,7 @@ def dechip_bit(sequence, symbol):
 		return 1
 	return 0
 	
-def dechip_byte(sequence, stream):
+def dechip_byte(sequence, stream, printable_only=False):
 	seq_len = len(sequence)
 	match = "%s%s -_" % (string.ascii_letters, string.digits)
 	# break the stream into chunks the same length as the sequence used
@@ -116,22 +116,22 @@ def dechip_byte(sequence, stream):
 		
 		ii += 1
 	
-	if(pack('B',byte) in match):
+	if(not printable_only or (pack('B',byte) in match)):
 		return byte
 	return None
 
-def dechip_bytes(sequence, byte_stream):
+def dechip_bytes(sequence, byte_stream, printable_only=False):
 	string = ""
 	ii = 0
 	while ii < len(byte_stream):
-		char = dechip_byte(sequence, byte_stream[ii])
+		char = dechip_byte(sequence, byte_stream[ii], printable_only)
 		if(char != None):
 			string += char
 		ii += 1
 		
 	return string
 
-def dechip_stream(sequence, stream):
+def dechip_stream(sequence, stream, printable_only=False):
 	# can only decode in modulo sequence length
 	sequence_len = len(sequence)
 	bytes = int(len(stream)/sequence_len)/8
@@ -149,7 +149,7 @@ def dechip_stream(sequence, stream):
 		
 			#print " looking at bits %d to %d" % (start, end)
 		
-			byte = dechip_byte(sequence, stream[(ii*sequence_len*8):((ii*sequence_len*8) + (sequence_len*8))])
+			byte = dechip_byte(sequence, stream[(ii*sequence_len*8):((ii*sequence_len*8) + (sequence_len*8))], printable_only)
 			if(byte == None):
 				#shift the stream over if we miss
 				stream = stream[1:]
@@ -217,6 +217,28 @@ def build_chip_table(len, seed):
 	
 	return additions
 
+def test_file_encoding(filename, chip_len, channel_number):
+	fd = open(filename, "r")
+	
+	# read file as a string
+	byte_stream = fd.read()
+	
+	# pick an n-size chipping sequence
+	chip_table = build_chip_table(chip_len, 1)
+	key = chip_table[channel_number]
+	
+	# encode file's data into a bit-stream
+	stream = chip_string(key, byte_stream)
+	
+	# decode it
+	result = dechip_stream(key, stream)
+	
+	if(result != byte_stream):
+		print "file test failed"
+		return 0
+	
+	print "file test passed"
+	return 1
 
 def main():
 	length = int(sys.argv[1])
@@ -229,7 +251,12 @@ def main():
 	if(key >= length):
 		print "Key must be less than chip table size"
 		
-	
+	try:
+		filename = sys.argv[3]
+		test_file_encoding(filename, length, key)
+	except:
+		pass
+		
 	table = build_chip_table(length, 1)
 	
 	seq = table[key]
@@ -259,13 +286,14 @@ def main():
 	
 	print "dechipping:"
 	
-	string = dechip_stream(seq, summed)
+	string = dechip_stream(seq, summed, True)
 	print "string: \'%s\'" % string
+	
 	sys.exit(0)
 	ii = 0
 	while ii < len(summed) - 64:
 		
-		string = dechip_stream(seq, summed[ii:])
+		string = dechip_stream(seq, summed[ii:], True)
 		if(string != None):
 			print "off: %d bits: string: %s" % (ii, string)
 		

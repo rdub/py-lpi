@@ -5,6 +5,46 @@ from pprint import pprint
 from struct import *
 import string
 
+def chip_bytes(sequence, data_stream):
+	'''
+	chip_bytes(sequence, data_stream):
+		Encodes a given byte stream (should be a list of bytes) with the given chipping sequence.
+		resulting data will be a list of bits. This will *expand* your input stream by len(sequence) bits per bit
+		If len(data_stream) is 8, and len(sequence) is 4, then the resulting data size will be 
+		8 (number of bytes) * 8 (8 bits per byte) * 4 (bit-length of chipping sequence).
+		Resulting data will be a stream of +1 or -1.  When encoding this data, anyvalue <= 0 should be encoded as a 0.
+		
+		It is possible to sum to data streams into the same sequence. Simply encoded both with 2 orthogonal chipping
+		sequences, add the resulting bit-vectors. 
+	
+	sequence:
+		Chipping sequence (bit-vector). Should be orthogonal to any other bit-vector possibly used.
+		
+	data_stream:
+		list of bytes (unsigned char) values to encode.
+		
+	return value:
+		bit-stream (not byte-stream) of encoded data
+	'''
+	
+	# ToDo
+	
+	bit_stream = []
+	
+	dlen = len(data_stream)
+	ii = 0
+	while ii < dlen:
+		jj = 0
+		while jj < 8:
+			if(data_stream[ii] & (1 << jj)):
+				bit_stream.extend(sequence)
+			else:
+				bit_stream.extend(map(lambda x:-1*x, sequence))
+			jj += 1
+		ii += 1
+	
+	return bit_stream
+
 def chip_string(sequence, string):
 	
 	stream = []
@@ -79,7 +119,18 @@ def dechip_byte(sequence, stream):
 	if(pack('B',byte) in match):
 		return byte
 	return None
-	
+
+def dechip_bytes(sequence, byte_stream):
+	string = ""
+	ii = 0
+	while ii < len(byte_stream):
+		char = dechip_byte(sequence, byte_stream[ii])
+		if(char != None):
+			string += char
+		ii += 1
+		
+	return string
+
 def dechip_stream(sequence, stream):
 	# can only decode in modulo sequence length
 	sequence_len = len(sequence)
@@ -119,14 +170,38 @@ def dechip_stream(sequence, stream):
 	return string
 	
 
-def chip_table(len, seed):
+def build_chip_table(len, seed):
+	'''
+	build_chip_table(len, seed):
+	len: 
+		size of matrix to build - result will be a len x len matrix of orthogonal sequences to
+		be used in encoding data.
+	seed: 
+		should be +1 or -1.  Any value above 0 will be interpretted as 1, and <= 0 will be intepretted as -1
+	
+	Return Value:
+		A len x len matrix of bits, encoded as +1 or -1 (not 0 or 1). Each one of these rows can be used as a chipping
+		key to encode a message.  Each chipping key is orthogonal, meaning each encoding can carry up to 'len' number
+		of messages. In order to decode a message, you must know which chipping key was used to encode it. Of course,
+		it's possible to decode a bit-stream with every chipping sequence generated/known.  Because such a feat is 
+		trivial, it is **highly** recommended to encrypt messages prior to encoding them with this library. 
+	'''
 	ret = []
 	
+	# Squash seed value to +/-1 
+	if(seed > 0):
+		seed = 1
+	else:
+		seed = -1
+		
+	# Initial sequence is [seed, seed],[seed,-seed]
 	if(2 == len):
 		return [[seed, seed],[seed,-1*seed]]
 		
-	sub = chip_table(len/2, seed)
-		
+	# Recursively build a matrix of orthogonal sequences
+	sub = build_chip_table(len/2, seed)
+	
+	# blah. kinda ugly code but it works
 	additions = []
 	
 	for half in sub:
@@ -155,7 +230,7 @@ def main():
 		print "Key must be less than chip table size"
 		
 	
-	table = chip_table(length, 1)
+	table = build_chip_table(length, 1)
 	
 	seq = table[key]
 	
@@ -184,6 +259,9 @@ def main():
 	
 	print "dechipping:"
 	
+	string = dechip_stream(seq, summed)
+	print "string: \'%s\'" % string
+	sys.exit(0)
 	ii = 0
 	while ii < len(summed) - 64:
 		

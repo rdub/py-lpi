@@ -4,6 +4,15 @@ import sys
 from pprint import pprint
 from struct import *
 import string
+import hashlib
+
+# Encoded as bytes in the header
+VERSION_MAJOR=1
+VERSION_MINOR=0
+VERSION_REVISION=0
+
+# Encoded as network-order long
+LPI_MAGIC=0xbeef1234
 
 def chip_bytes(sequence, data_stream):
 	'''
@@ -45,8 +54,26 @@ def chip_bytes(sequence, data_stream):
 	
 	return bit_stream
 
-def chip_string(sequence, string):
+def chip_header(sequence):
+	string = "\x01" + pack("!BBBL", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION, LPI_MAGIC)
+	stream = __chip_string(sequence, string)
 	
+	return stream
+	
+def dechip_header(sequence, stream):
+	string = __dechip_stream(sequence, stream[0:len(sequence)*8*8], maxlen=8)
+	(c, maj, minor, rev, magic) = unpack("!BBBBL", string)
+	
+	if(c == 1 and magic == LPI_MAGIC):
+		# We've got a header, decode the length
+		string = __dechip_stream(sequence, stream[len(sequence)*8*8:len(sequence)*8*8 + len(sequence)*8*4], maxlen=4)
+		data_len = unpack("!L", string)[0]
+		
+		#print "data_len: %d bytes" % data_len
+		return (data_len, stream[len(sequence)*8*(12):])
+	return (0, None)
+
+def __chip_string(sequence, string):
 	stream = []
 	jj = 0
 	while jj < len(string):
@@ -66,6 +93,28 @@ def chip_string(sequence, string):
 		
 		jj += 1
 	return stream
+
+def chip_string(sequence, string):
+	stream = []
+	
+	# Hash the string
+	msg_hash = hashlib.md5(string).digest()
+	
+	#print "msg digest: %s (%d bytes)" % (repr(msg_hash), len(msg_hash))
+	
+	# Build a packet header
+	stream.extend(chip_header(sequence))
+	# Encode the string length
+	stream.extend(__chip_string(sequence, pack("!L", len(string))))
+	
+	# encode the string
+	stream.extend(__chip_string(sequence,string))
+	
+	# encode a hash (for checksum function only)
+	stream.extend(__chip_string(sequence, msg_hash))
+	
+	return stream	
+	
 
 def stream_bit_to_bit(bit):
 	if(bit > 0):
@@ -87,6 +136,21 @@ def stream_to_string(stream):
 		ii += 1
 	return string
 	
+def data_to_stream(string):
+	stream = []
+	
+	ii = 0
+	while ii < len(string):
+		byte = unpack("B", string[ii])[0]
+		
+		if(byte & (1)):
+			stream.append(1)
+		else:
+			stream.append(-1)
+			
+		ii += 1
+	return stream
+	
 # basically, dot product code
 def dechip_bit(sequence, symbol):
 	# symbol and sequence are assumed to be the same length
@@ -103,8 +167,6 @@ def dechip_bit(sequence, symbol):
 def dechip_byte(sequence, stream, printable_only=False):
 	seq_len = len(sequence)
 	match = "%s%s -_" % (string.ascii_letters, string.digits)
-	# break the stream into chunks the same length as the sequence used
-	str_len = len(stream)
 	
 	ii = 0
 	byte = 0
@@ -116,8 +178,9 @@ def dechip_byte(sequence, stream, printable_only=False):
 		
 		ii += 1
 	
-	if(not printable_only or (pack('B',byte) in match)):
+	if((not printable_only) or pack('B',byte) in match):
 		return byte
+	
 	return None
 
 def dechip_bytes(sequence, byte_stream, printable_only=False):
@@ -130,19 +193,21 @@ def dechip_bytes(sequence, byte_stream, printable_only=False):
 		ii += 1
 		
 	return string
-
-def dechip_stream(sequence, stream, printable_only=False):
+	
+def __dechip_stream(sequence, stream, printable_only=False, maxlen=None):
 	# can only decode in modulo sequence length
 	sequence_len = len(sequence)
 	bytes = int(len(stream)/sequence_len)/8
-	
+		
 	string = ""
 	
-	#print "decoding at most %d bytes" % bytes
+	#print "decoding at most %d bytes" % data_len
+	if(None == maxlen):
+		maxlen = bytes
 	
+	ii = 0
 	while string == "" and len(stream):
-		ii = 0
-		while ii < bytes:
+		while ii < maxlen:
 		
 			start = (ii*sequence_len*8)
 			end = start + (sequence_len*8)
@@ -169,8 +234,35 @@ def dechip_stream(sequence, stream, printable_only=False):
 		
 	return string
 	
+def dechip_stream(sequence, stream):
+	# Decode the header
+	(data_len, stream) = dechip_header(sequence, stream)
+	
+	# If the magic bits don't match, ignore this shiznit
+	if(data_len == 0 or stream == None):
+		return None
+	
+	# Otherwise, now we know how many bytes are valid data
+	# Decode it
+	string = __dechip_stream(sequence, stream, maxlen=data_len)
+	
+	#print "str: %s" % string
+	# Advance to the hash (CRC)
+	
+	# Decode the hash
+	stream = stream[data_len*len(sequence)*8:]
+	
+	#print "%d bits left" % len(stream)
+	
+	digest = __dechip_stream(sequence, stream, maxlen=16)
+	#print "digest: %s" % repr(digest)
+	
+	xmit_digest = hashlib.md5(string).digest()
+	
+	return (xmit_digest == digest, string)
+	
 
-def build_chip_table(len, seed):
+def build_chip_table(len, seed=1):
 	'''
 	build_chip_table(len, seed):
 	len: 

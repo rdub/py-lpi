@@ -1,0 +1,104 @@
+Py-LPI: Python Low Probability of Intercept encoding/decoding library
+
+Overview:
+	This library is used to generate bit-streams from data.  Bitstreams are encoded in a code-division multiple-access manner.  What this basically means is, while only altering the very least significant bit, we can embed up to 3 [1] distinct messages into a data stream.
+	
+Applications:
+	- Embedding data within audio or image streams [2], 
+	- Embedding data within raw video streams [2],
+	- Embedding data within random data [2]
+	
+	Any container file must be in a loss-less format.
+	
+NOTE:
+	This library does not obfuscate the embedded data in anyway.  Anyone with access to this library can decode data that was encoded with this library.  With that in mind, it is highly recommended that you encrypt any data you intend to pass around with this library.
+	
+Usage notes:
+
+	Embedding data:
+		Target Data size must be sufficiently larger than the input data.  If you use a key-space of size N, then you should expect a message of size M to require a dataset of N*8*M bytes within which to hide.  This is an artifact of how CDM encoding works.  Each bit of input data expands to N bytes of output data (since we only use the LSBs).
+		
+		However, this does not mean that if you want to embed 3 messages, that you would need N*8*(M + P + O) bytes (where M, P, and O, are the lengths of the 3 messages).  In reality, you would need MIN(M,P,O)*N*8, meaning the required data size within which to embed your data only depends on the largest message you'd like to embed.
+		
+	Embedding multiple messages:
+		Should you chose to embed multiple messages, you'll want to ensure that each message uses a distinct keys from the same key-space.  Think of the keys as channels, and the key-space as the carrier.  With each message on a different channel of the wave, we can avoid destructive interference.
+		
+	Good container files:
+		A good container file is something that is either a) random noise, or b) encoded in a loss-less format (such as WAV or PNG).  Keep in mind that loss-less doesn't mean uncompressed!  When embedding data, be sure to encode the message into the *uncompressed* representation of the data.  Open your container file, decompress and decode it, get the raw bytes, embed your message(s) in those raw bytes, encode it, re-compress it, and save the resultant file.  With a good image or audio file, you won't be able to tell the message is embedded.
+		
+	Message Integrity
+		All messages encoded with this library contain a message digest.  This message digest is not cryptographically secure - it's purpose is only to ensure when we decode data, that we're decoding valid data.  It would be entirely possible for an entity performing a man-in-the-middle attack to completely remove the original message and replace it with another. Please always keep this in mind.
+		
+		It would be possible to encrypt a data file, encode it into an image with this library, then cryptographically sign the container file.  At this level of paranoia, though, you lose plausible deniability (meaning you cannot deny that you created and sent the container file, as well as any data embedded within it).
+		
+Usage:
+	This library is object oriented. 
+	
+	Encoding data:
+		- import this library:
+			import lpi
+			
+		- Use your favorite method for reading the container file data into a string.
+			- Remember, if you're using an image audio, or otherwise loss-lessly compressed file format, to decode and uncompress the data in this step.
+		- Use your favorite method for reading the message file into a string.
+		- Create a key table:
+			t = lpi.ChippingTable(key_space_size)
+			
+			key_space_size must be greater than 2, and an even number. Keep in mind that each bit of message data will become key_space_size *bytes* of container file data
+			
+		- Pick a channel to encode on:
+			k = t.key(channel)
+			
+			channel must be in the range [0,key_space_size-1]
+			
+			You can encode up to 3 messages - for each message, pick a different key (no two messages can share the same channel)
+			
+		- Create an encoder:
+			e = lpi.ChippingEncoder()
+		
+		- For each message (up to 3):
+			- Set the key:
+				e.set_key(k)
+			- create a message object:
+				m = lpi.ChippingMessage(data)
+				
+				data must be a string
+			- add the message to the encoder:
+				e.appendMessage(m)
+		
+		- embed the messages in the target data:
+			e.embedInData(container_data)
+			
+			container_data must be a string. 
+				container data ssize must be > key_size * 8 * max(len(message_data1),len(message_data2),...) + 32*key_size 
+		- Use your favorite/standard method to encode, loss-lessly compress, and write the data back out to disk
+		
+	Decoding data:
+		- create the key table as before
+		- pick a channel key as before
+		- read in, decompress (loss-less!), decode container file data
+		- create a decoder:
+			d = lpi.ChippingDecoder()
+		- set the key:
+			d.set_key(key)
+		- recover the file data from the container data:
+			data = d.recoverFromData(container_data)
+			
+			if(data != None):
+				.. blah ..
+		- Store recovered data back to disk
+		
+Examples:
+	- Please see steg_tool.py in the top-level directory.
+		- The steg_tool.py tool requires the Python Image Library (v.1.1.7 at time of writing), available here:
+			<http://www.pythonware.com/products/pil/>
+		- steg_tool.py only works on PNG files
+	
+NOTES: 
+	[1] Using this technology, one could theoretically encode N messages (N being the key-space size) into a data-stream without loss. We arbitrarily limit ourselves to 3 message since we're limiting ourselves to only touching 1 LSB.  If we opened up to 2 LSBs, we could bump that limit up to 6, and so on.
+	[2] The data embedded is not obfuscated in any way.  Anyone with this library and your container files can decode the data. For this reason, should you choose to embed any sensitive data, please ensure said data is encrypted prior to encoding it with this library.
+	
+Resources:
+	CDMA - <http://en.wikipedia.org/wiki/Code_division_multiple_access>
+	Python Imaging Library - <http://www.pythonware.com/products/pil/>
+	

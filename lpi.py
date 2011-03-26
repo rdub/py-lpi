@@ -231,6 +231,7 @@ class ChippingEncoder:
 	key = None
 	key_len = 0
 	msg_count = 0
+	cached_size = 0
 	
 	def __encode_string(self, string):
 		if(len(string) == 0):
@@ -287,6 +288,7 @@ class ChippingEncoder:
 		new_stream = self.__encode_header()
 		new_stream.extend(self.__encode_string(message.toString()))
 		self.data_stream = map(lambda x,y: self.__interfere(x,y), self.data_stream, new_stream)
+		self.cached_size = len(self.encodedBitstream())
 		return self
 	
 	def encodedBitstream(self):
@@ -333,7 +335,7 @@ class ChippingEncoder:
 		return "".join(data)
 		
 	def size(self):
-		return len(self.encodedBitstream())
+		return self.cached_size
 	
 	def set_key(self, key):
 		self.key = key
@@ -346,6 +348,8 @@ class ChippingEncoder:
 		self.data_stream = []
 		self.key = []
 		self.key_len = 0
+		self.msg_count = 0
+		self.cached_size = 0
 		if(key != None):
 			self.set_key(key)
 		

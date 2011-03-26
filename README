@@ -16,12 +16,12 @@ NOTE:
 Usage notes:
 
 	Embedding data:
-		Target Data size must be sufficiently larger than the input data.  If you use a key-space of size N, then you should expect a message of size M to require a dataset of N*8*M bytes within which to hide.  This is an artifact of how CDM encoding works.  Each bit of input data expands to N bytes of output data (since we only use the LSBs).
+		Container Data size must be sufficiently larger than the embedded message data.  If you use a key-space of size N, then you should expect a message of size M to require a container dataset of N*8*(M+32) bytes within which to hide.  This is an artifact of how CDMA encoding works.  Each bit of input data expands to N bytes of output data (since we only use the LSBs).
 		
-		However, this does not mean that if you want to embed 3 messages, that you would need N*8*(M + P + O) bytes (where M, P, and O, are the lengths of the 3 messages).  In reality, you would need MIN(M,P,O)*N*8, meaning the required data size within which to embed your data only depends on the largest message you'd like to embed.
+		However, this does not mean that if you want to embed 3 messages, that you would need N*8*(M + P + O + 32) bytes (where M, P, and O, are the lengths of the 3 messages).  In reality, you would need MAX(M+32,P+32,O+32)*N*8, meaning the required data size within which to embed your data only depends on the largest message you'd like to embed.
 		
 	Embedding multiple messages:
-		Should you chose to embed multiple messages, you'll want to ensure that each message uses a distinct keys from the same key-space.  Think of the keys as channels, and the key-space as the carrier.  With each message on a different channel of the wave, we can avoid destructive interference.
+		Should you chose to embed multiple messages, you'll want to ensure that each message uses a distinct keys from the same key-space.  Think of the keys as channels, and the key-space as the carrier.  With each message on a different channel of the carrier, we can avoid destructive interference.
 		
 	Good container files:
 		A good container file is something that is either a) random noise, or b) encoded in a loss-less format (such as WAV or PNG).  Keep in mind that loss-less doesn't mean uncompressed!  When embedding data, be sure to encode the message into the *uncompressed* representation of the data.  Open your container file, decompress and decode it, get the raw bytes, embed your message(s) in those raw bytes, encode it, re-compress it, and save the resultant file.  With a good image or audio file, you won't be able to tell the message is embedded.
@@ -39,7 +39,7 @@ Usage:
 			import lpi
 			
 		- Use your favorite method for reading the container file data into a string.
-			- Remember, if you're using an image audio, or otherwise loss-lessly compressed file format, to decode and uncompress the data in this step.
+			- Remember, if you're using an image, audio, or otherwise loss-lessly compressed file format, to decode and uncompress the data in this step.
 		- Use your favorite method for reading the message file into a string.
 		- Create a key table:
 			t = lpi.ChippingTable(key_space_size)
@@ -70,7 +70,7 @@ Usage:
 			e.embedInData(container_data)
 			
 			container_data must be a string. 
-				container data ssize must be > key_size * 8 * max(len(message_data1),len(message_data2),...) + 32*key_size 
+				container data size must be > key_size * 8 * max(len(message_data1),len(message_data2),...) + 32*key_size*8
 		- Use your favorite/standard method to encode, loss-lessly compress, and write the data back out to disk
 		
 	Decoding data:

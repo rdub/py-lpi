@@ -41,7 +41,7 @@ def steg_encode(data_file, img_file, ksize=None, channel=None):
 	
 	# Embed the data
 	pixel_data = e.embedInData(pixel_data)
-	pprint(pixel_data)
+	#pprint(pixel_data)
 	
 	# put it back into the image object
 	img.fromstring("".join(pixel_data))
@@ -71,7 +71,8 @@ def steg_decode(output_file, img_file, ksize=None, channel=None):
 	
 	# open the image
 	decode = Image.open(img_file)
-	pprint(decode.tostring())
+	#pprint(decode.tostring())
+	
 	data = list(decode.tostring())
 	
 	string = d.recoverFromData(data)
@@ -81,78 +82,32 @@ def steg_decode(output_file, img_file, ksize=None, channel=None):
 		fd = open(output_file, "w+")
 		fd.write(string)
 		fd.close()
+		return string
+		
 	print "No data found!"
 		
 	return None
 
 def main():
-	parser = optparse.OptionParser(description='Encode a file into an image, below the noise floor.')
-	parser.add_option("-e", "--encode", help="the file to encode")
-	parser.add_option("-d", "--decode", help="File image to decode")
-	parser.add_option("-k", "--ksize", help="keyspace size (2-64, even only)")
-	parser.add_option("-c", "--channel", help="the channel to look within")
+	parser = optparse.OptionParser(description='Encode or decode a file into/from a PNG image.', 
+					usage="usage: %prog [options] image-file.png")
+	parser.add_option("-e", "--encode", metavar="input-file", help="the msg/file to encode")
+	parser.add_option("-d", "--decode", metavar="output-file", help="where to write the stored output file")
+	parser.add_option("-k", "--ksize", metavar="bits", help="keyspace size (2-64, even only)")
+	parser.add_option("-c", "--channel", metavar="channel", help="the channel to look within")
 	
 	(options, args) = parser.parse_args()
 	
-	if(len(args) == 0):
-		sys.exit(-1)
+	if(len(args) != 0):
+		if(options.encode):
+			steg_encode(options.encode, args[0], options.ksize, options.channel)
+		if(options.decode):
+			steg_decode(options.decode, args[0], options.ksize, options.channel)
+		sys.exit(0)
 	
-	if(options.encode):
-		steg_encode(options.encode, args[0], options.ksize, options.channel)
-	if(options.decode):
-		steg_decode(options.decode, args[0], options.ksize, options.channel)
+	parser.print_help()
 	
-	sys.exit(-1)
-	
-	
-	k_len = int(sys.argv[1])
-	channel = int(sys.argv[2])
-	data_file = sys.argv[3]
-	img_target = sys.argv[4]
-	
-	t = lpi.ChippingTable(k_len)
-	e = lpi.ChippingEncoder(t.key(channel))
-	d = lpi.ChippingDecoder(t.key(channel))
-	
-	fd = open(data_file, "r")
-	data = fd.read()
-	
-	m = lpi.ChippingMessage(data)
-	
-	e.appendMessage(m)
-	
-	img = Image.open(img_target)
-	pixel_data = list(img.tostring())
-	size = len(pixel_data)
-	
-	if(size < e.size()):
-		print "image is not large enough - should be at least %d bytes of pixel data" % e.size()
-		sys.exit(-1)
-	print "%d bytes of pixels" % size
-	print "%d bytes of data" % e.size()
-	
-	# Embed the data
-	pixel_data = e.embedInData(pixel_data)
-	
-	# put it back into the image
-	img.fromstring("".join(pixel_data))
-	
-	options = {}
-	options['quality'] = 1.0
-	
-	# Save the image
-	img.save("output-changed.png", format="PNG", options=options)
-	
-	# open the image
-	decode = Image.open("output-changed.png")
-	data = list(decode.tostring())
-	
-	string = d.recoverFromData(data)
-	
-	if(string):
-		print "data:\n%s" % string
-	else:
-		print "data not found!"
+	sys.exit(1)
 	
 if __name__ == "__main__":
     main()

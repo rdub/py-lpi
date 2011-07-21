@@ -3,7 +3,7 @@
 import lpi
 import sys
 import optparse
-import base64
+import base64, zlib
 from pprint import pprint
 from stat import *
 
@@ -41,7 +41,7 @@ def steg_encode(input_file, ksize=None, channel=None):
 	# Save the output as base64 data
 	print "saving file as %s" % outfile_name
 	wfd = open(outfile_name, "w+")
-	b64_data = base64.b64encode(encoded_data)
+	b64_data = base64.b64encode(zlib.compress(encoded_data))
 	while(b64_data != ""):
 		wfd.write(b64_data[0:80])
 		wfd.write("\n")
@@ -66,7 +66,7 @@ def steg_decode(input_file, ksize=None, channel=None):
 	fd = open(input_file, "r")
 	inp_data = fd.read()
 	inp_data = inp_data.replace("\n", "")
-	data = base64.b64decode(inp_data)
+	data = zlib.decompress(base64.b64decode(inp_data))
 		
 	string = d.recoverFromData(data)
 	

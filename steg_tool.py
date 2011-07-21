@@ -100,9 +100,9 @@ def main():
 	
 	if(len(args) != 0):
 		if(options.encode):
-			steg_encode(options.encode, args[0], options.ksize, options.channel)
+			steg_encode(options.encode, args[0], int(options.ksize), int(options.channel))
 		if(options.decode):
-			steg_decode(options.decode, args[0], options.ksize, options.channel)
+			steg_decode(options.decode, args[0], int(options.ksize), int(options.channel))
 		sys.exit(0)
 	
 	parser.print_help()

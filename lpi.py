@@ -421,6 +421,42 @@ class ChippingTable:
 	def __str__(self):
 		return repr(self.table)
 
+def __bit_freq_count(stream):
+	zeros = 0
+	ones = 0
+	ll = len(stream)
+	for e in stream:
+		if(e == '1'):
+			ones += 1
+		elif(e == '0'):
+			zeros += 1
+	return (float(zeros)/ll, float(ones)/ll)
+	
+def __byte_freq_count(stream):
+	counts = {}
+	for e in xrange(0, 256):
+		counts[e] = 0
+	ll = len(stream)
+	for ii in xrange(0, ll):
+		b = unpack("B", stream[ii])
+		counts[b[0]] += 1
+	
+	table = []
+	
+	for kv in counts.items():
+		count = float(kv[1])/ll
+		#print "%d : %f" % (kv[0], count)
+		counts[kv[0]] = count
+		
+	return counts
+		
+
+def freq_count(stream, bits=False):
+	if(bits):
+		return __bit_freq_count(stream)
+	else:
+		return __byte_freq_count(stream)
+
 def class_test():
 	key_size = 16
 	data_size = key_size * 8192
